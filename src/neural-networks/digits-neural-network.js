@@ -1,65 +1,35 @@
 import * as tf from "@tensorflow/tfjs";
-import * as tfvis from "@tensorflow/tfjs-vis";
 import { MnistData } from "./digits-helper.js";
 
-const IMAGE_WIDTH = 28;
-const IMAGE_HEIGHT = 28;
-const IMAGE_CHANNELS = 1;
-const NUM_OUTPUT_CLASSES = 10;
-const BATCH_SIZE = 512;
-const TRAIN_DATA_SIZE = 5500; // 55000
-const TEST_DATA_SIZE = 1000; // 10000
-const classNames = [
-  "Zero",
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine"
-];
+const IMAGE_SIDE = 28;
 
-function createAndCompileModel() {
+function createConvModel() {
   const model = tf.sequential();
 
   model.add(
     tf.layers.conv2d({
-      inputShape: [IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNELS],
-      kernelSize: 5,
-      filters: 8,
-      strides: 1,
-      activation: "relu",
-      kernelInitializer: "varianceScaling"
-    })
-  );
-  model.add(tf.layers.maxPooling2d({ poolSize: [2, 2], strides: [2, 2] }));
-
-  model.add(
-    tf.layers.conv2d({
-      kernelSize: 5,
+      inputShape: [IMAGE_SIDE, IMAGE_SIDE, 1],
+      kernelSize: 3,
       filters: 16,
-      strides: 1,
-      activation: "relu",
-      kernelInitializer: "varianceScaling"
+      activation: "relu"
     })
   );
-  model.add(tf.layers.maxPooling2d({ poolSize: [2, 2], strides: [2, 2] }));
-  model.add(tf.layers.flatten());
 
+  model.add(tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }));
   model.add(
-    tf.layers.dense({
-      units: NUM_OUTPUT_CLASSES,
-      kernelInitializer: "varianceScaling",
-      activation: "softmax"
-    })
+    tf.layers.conv2d({ kernelSize: 3, filters: 32, activation: "relu" })
+  );
+  model.add(tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }));
+  model.add(
+    tf.layers.conv2d({ kernelSize: 3, filters: 32, activation: "relu" })
   );
 
-  const optimizer = tf.train.adam();
+  model.add(tf.layers.flatten({}));
+  model.add(tf.layers.dense({ units: 64, activation: "relu" }));
+  model.add(tf.layers.dense({ units: 10, activation: "softmax" }));
+
   model.compile({
-    optimizer: optimizer,
+    optimizer: "rmsprop",
     loss: "categoricalCrossentropy",
     metrics: ["accuracy"]
   });
@@ -70,121 +40,77 @@ function createAndCompileModel() {
 export default class DigitsNeuralNetwork {
   constructor() {
     this.data = new MnistData();
-    this.model = createAndCompileModel();
+    this.model = createConvModel();
     this.data.load();
-    //await this.showExamples();
   }
 
   async save() {
-    await this.model.save('downloads://digits-model');
+    await this.model.save("downloads://digits-model");
   }
 
-  async load() {
-    this.model = await tf.loadLayersModel('http://localhost:5000/digits-model.json');
-  }
-
-  async train() {
-    const metrics = ["loss", "val_loss", "acc", "val_acc"];
-    const container = {
-      name: "Model Training",
-      styles: { height: "1000px" }
-    };
-    const fitCallbacks = tfvis.show.fitCallbacks(container, metrics);
-
-    const [trainXs, trainYs] = tf.tidy(() => {
-      const d = this.data.nextTrainBatch(TRAIN_DATA_SIZE);
-      return [d.xs.reshape([TRAIN_DATA_SIZE, 28, 28, 1]), d.labels];
-    });
-
-    const [testXs, testYs] = tf.tidy(() => {
-      const d = this.data.nextTestBatch(TEST_DATA_SIZE);
-      return [d.xs.reshape([TEST_DATA_SIZE, 28, 28, 1]), d.labels];
-    });
-
-    return this.model.fit(trainXs, trainYs, {
-      batchSize: BATCH_SIZE,
-      validationData: [testXs, testYs],
-      epochs: 10,
-      shuffle: true,
-      callbacks: fitCallbacks
-    });
-  }
-
-  async showExamples() {
-    // Create a container in the visor
-    const surface = tfvis
-      .visor()
-      .surface({ name: "Input Data Examples", tab: "Input Data" });
-
-    // Get the examples
-    const examples = this.data.nextTestBatch(20);
-    const numExamples = examples.xs.shape[0];
-
-    // Create a canvas element to render each example
-    for (let i = 0; i < numExamples; i++) {
-      const imageTensor = tf.tidy(() => {
-        // Reshape the image to 28x28 px
-        return examples.xs
-          .slice([i, 0], [1, examples.xs.shape[1]])
-          .reshape([28, 28, 1]);
-      });
-
-      const canvas = document.createElement("canvas");
-      canvas.width = 28;
-      canvas.height = 28;
-      canvas.style = "margin: 4px;";
-      await tf.browser.toPixels(imageTensor, canvas);
-      surface.drawArea.appendChild(canvas);
-
-      imageTensor.dispose();
-    }
-  }
-
-  doPrediction(testDataSize = 500) {
-    const testData = this.data.nextTestBatch(testDataSize);
-    const testxs = testData.xs.reshape([
-      testDataSize,
-      IMAGE_WIDTH,
-      IMAGE_HEIGHT,
-      1
-    ]);
-
-    const labels = testData.labels.argMax([-1]);
-    console.log(testxs);
-    const preds = this.model.predict(testxs).argMax([-1]);
-
-    testxs.dispose();
-    return [preds, labels];
-  }
-
-  async showAccuracy() {
-    const [preds, labels] = this.doPrediction();
-    const classAccuracy = await tfvis.metrics.perClassAccuracy(labels, preds);
-    const container = { name: "Accuracy", tab: "Evaluation" };
-    tfvis.show.perClassAccuracy(container, classAccuracy, classNames);
-
-    labels.dispose();
-  }
-
-  async showConfusion() {
-    const [preds, labels] = this.doPrediction();
-    const confusionMatrix = await tfvis.metrics.confusionMatrix(labels, preds);
-    const container = { name: "Confusion Matrix", tab: "Evaluation" };
-    tfvis.render.confusionMatrix(
-      container,
-      { values: confusionMatrix },
-      classNames
+  async load(onIteration) {
+    this.model = await tf.loadLayersModel(
+      "http://localhost:5000/digits-model.json"
     );
+  }
 
-    labels.dispose();
+  async train(plotLoss, plotAccuracy) {
+    const batchSize = 320;
+    const validationSplit = 0.15; // 15% of data -> validation to monitor overfitting.
+    const trainEpochs = 3;
+    let trainBatchCount = 0;
+
+    const trainData = this.data.getTrainData();
+    const testData = this.data.getTestData();
+
+    const totalNumBatches =
+      Math.ceil((trainData.xs.shape[0] * (1 - validationSplit)) / batchSize) *
+      trainEpochs;
+
+    let valAcc;
+    await this.model.fit(trainData.xs, trainData.labels, {
+      batchSize,
+      validationSplit,
+      epochs: trainEpochs,
+      callbacks: {
+        onBatchEnd: async (batch, logs) => {
+          trainBatchCount++;
+          console.log(
+            `Training... (` +
+              `${((trainBatchCount / totalNumBatches) * 100).toFixed(1)}%` +
+              ` complete). To stop training, refresh or close page.`
+          );
+          plotLoss(trainBatchCount, logs.loss);
+          plotAccuracy(trainBatchCount, logs.acc);
+          // if (onIteration && batch % 10 === 0) {
+          //   onIteration("onBatchEnd", batch, logs);
+          // }
+          await tf.nextFrame();
+        },
+        onEpochEnd: async (epoch, logs) => {
+          valAcc = logs.val_acc;
+          plotLoss(trainBatchCount, logs.val_loss);
+          plotAccuracy(trainBatchCount, logs.val_acc);
+          // if (onIteration) {
+          //   onIteration("onEpochEnd", epoch, logs);
+          // }
+          await tf.nextFrame();
+        }
+      }
+    });
+
+    const testResult = this.model.evaluate(testData.xs, testData.labels);
+    const testAccPercent = testResult[1].dataSync()[0] * 100;
+    const finalValAccPercent = valAcc * 100;
+    console.log(
+      `Final validation accuracy: ${finalValAccPercent.toFixed(1)}%; ` +
+        `Final test accuracy: ${testAccPercent.toFixed(1)}%`
+    );
   }
 
   predict(value) {
     const t = tf.tensor1d(value);
-    const reshaped = t.reshape([1, IMAGE_WIDTH, IMAGE_HEIGHT, 1]);
-
-    //const labels = t.labels.argMax([-1]);
-    console.log('reshaped', reshaped);
+    const reshaped = t.reshape([1, IMAGE_SIDE, IMAGE_SIDE, 1]);
     const preds = this.model.predict(reshaped).argMax([-1]);
 
     reshaped.dispose();

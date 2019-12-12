@@ -6,11 +6,8 @@
   let ctx;
   let miniCtx;
   let isMouseDown = false;
-  let prevX = 0;
   let currX = 0;
-  let prevY = 0;
   let currY = 0;
-  let isDrawing = false;
   const dispatch = createEventDispatcher();
 
   const canvasSide = 140;
@@ -18,18 +15,12 @@
 
   function draw() {
     ctx.beginPath();
-    ctx.moveTo(prevX, prevY);
-    ctx.lineTo(currX, currY);
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 10;
-    ctx.stroke();
-    ctx.closePath();
+    ctx.arc(currX, currY, 10, 0, 2 * Math.PI);
+    ctx.fill();
   }
 
   function mousemove(e) {
     if (isMouseDown) {
-      prevX = currX;
-      prevY = currY;
       currX = e.clientX - canvas.offsetLeft;
       currY = e.clientY - canvas.offsetTop;
       draw();
@@ -37,20 +28,9 @@
   }
 
   function mousedown(e) {
-    prevX = currX;
-    prevY = currY;
     currX = e.clientX - canvas.offsetLeft;
     currY = e.clientY - canvas.offsetTop;
-
     isMouseDown = true;
-    isDrawing = true;
-    if (isDrawing) {
-      ctx.beginPath();
-      ctx.fillStyle = "black";
-      ctx.fillRect(currX, currY, 2, 2);
-      ctx.closePath();
-      isDrawing = false;
-    }
   }
 
   function mouseup(e) {
@@ -63,24 +43,26 @@
 
   onMount(async () => {
     ctx = canvas.getContext("2d");
+    ctx.fillStyle = "black";
     miniCtx = miniCanvas.getContext("2d");
   });
 
   function clear() {
     ctx.clearRect(0, 0, canvasSide, canvasSide);
     miniCtx.clearRect(0, 0, miniCanvasSide, miniCanvasSide);
+    dispatch("clear");
   }
 
-  function test() {
+  function predictValue() {
     miniCtx.drawImage(canvas, 0, 0, miniCanvasSide, miniCanvasSide);
     const { data } = miniCtx.getImageData(0, 0, miniCanvasSide, miniCanvasSide);
 
     const result = [];
     for (let i = 0; i < data.length; i += 4) {
-      result.push(data[i + 3]);
+      result.push(data[i + 3] / 256);
     }
 
-    dispatch('test', result);
+    dispatch("test", result);
   }
 </script>
 
@@ -90,19 +72,22 @@
   }
 </style>
 
-<canvas
-  bind:this={canvas}
-  on:mousemove={mousemove}
-  on:mousedown={mousedown}
-  on:mouseup={mouseup}
-  on:mouseout={mouseout}
-  width={canvasSide}
-  height={canvasSide} />
+<div>
+  <canvas
+    bind:this={canvas}
+    on:mousemove={mousemove}
+    on:mousedown={mousedown}
+    on:mouseup={mouseup}
+    on:mouseout={mouseout}
+    width={canvasSide}
+    height={canvasSide} />
 
-<canvas
-  bind:this={miniCanvas}
-  width={miniCanvasSide}
-  height={miniCanvasSide} />
-
-<button on:click={test}>test</button>
-<button on:click={clear}>clear</button>
+  <canvas
+    bind:this={miniCanvas}
+    width={miniCanvasSide}
+    height={miniCanvasSide} />
+</div>
+<div>
+  <button on:click={predictValue}>test</button>
+  <button on:click={clear}>clear</button>
+</div>

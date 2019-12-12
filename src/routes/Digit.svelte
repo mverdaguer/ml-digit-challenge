@@ -1,56 +1,76 @@
 <script>
-  import { onMount } from "svelte";
   import * as tfvis from "@tensorflow/tfjs-vis";
   import DigitsNeuralNetwork from "../neural-networks/digits-neural-network";
   import CanvasEditor from "../components/canvas-editor.svelte";
 
+  let accuracyChart;
+  let lastAcc;
   let lossChart;
+  let lastLoss;
   let training = false;
   let trained = false;
 
   const nn = new DigitsNeuralNetwork();
 
-  async function train() {
-    // training = true;
-    // const result = await nn.train();
-
-    // await nn.showAccuracy();
-    // await nn.showConfusion();
-
-    // nn.doPrediction(1);
-
-    // const lossList = result.history.loss.map((loss, i) => {
-    //   return { x: i, y: loss };
-    // });
-
-    // tfvis.render.linechart(
-    //   lossChart,
-    //   { values: [lossList], series: ["loss"] },
-    //   {
-    //     width: 420,
-    //     height: 300,
-    //     xLabel: "epoch",
-    //     yLabel: "loss"
-    //   }
-    // );
+  function loadModel() {
     nn.load();
+    trained = true;
+  }
+
+  const lossValues = [];
+  function plotLoss(batch, loss) {
+    lossValues.push({ x: batch, y: loss });
+    tfvis.render.linechart(
+      lossChart,
+      { values: lossValues, series: ["train"] },
+      {
+        xLabel: "Batch #",
+        yLabel: "Loss",
+        width: 400,
+        height: 300
+      }
+    );
+    lastLoss = loss.toFixed(3);
+  }
+
+  const accuracyValues = [];
+  function plotAccuracy(batch, accuracy) {
+    accuracyValues.push({ x: batch, y: accuracy });
+    tfvis.render.linechart(
+      accuracyChart,
+      { values: accuracyValues, series: ["train"] },
+      {
+        xLabel: "Batch #",
+        yLabel: "Accuracy",
+        width: 400,
+        height: 300
+      }
+    );
+    lastAcc = accuracy.toFixed(3);
+  }
+
+  async function train() {
+    training = true;
+    const result = await nn.train(plotLoss, plotAccuracy);
     training = false;
     trained = true;
   }
 
   let inputNumber;
   let outputNumber;
+  let predictedValue;
   $: if (inputNumber) {
     const r = nn.predict(inputNumber);
     outputNumber = r.dataSync()[0];
   }
 
-  function test(value) {
-    console.log('test', value.detail);
-    const r = nn.doPrediction(1);
-    console.log('dododo', r, r[0].dataSync(), r[1].dataSync());
+  function predictValue(value) {
     const result = nn.predict(value.detail);
-    console.log(result);
+    predictedValue = result[0];
+  }
+
+  function clearResult() {
+    predictedValue = undefined;
   }
 </script>
 
@@ -63,13 +83,14 @@
     color: red;
   }
 
-  .hidden {
-    display: none;
+  .graphs {
+    display: flex;
   }
 </style>
 
 <h1>Machine learning - Digit recognition</h1>
-<button on:click={train}>TRAIN</button>
+<button on:click={train}>Train</button>
+<button on:click={loadModel}>Load model</button>
 <section>
   {#if training}
     <p>Training...</p>
@@ -77,12 +98,27 @@
       src="https://media.giphy.com/media/XzutKuTTlIEeI/giphy.gif"
       alt="training" />
   {/if}
-  <div bind:this={lossChart} class:hidden={training || !trained} />
+  {#if training || trained}
+    <div class="graphs">
+      <div>
+        <label>last loss: {lastLoss}</label>
+        <div bind:this={lossChart} />
+      </div>
+      <div>
+        <label>last acc: {lastAcc}</label>
+        <div bind:this={accuracyChart} />
+      </div>
+
+    </div>
+  {/if}
 </section>
 
 {#if trained && !training}
   <section>
     <h2>Test</h2>
-    <CanvasEditor on:test={test}/>
+    <CanvasEditor on:test={predictValue} on:clear={clearResult} />
+    {#if predictedValue}
+      <p>Result: {predictedValue}</p>
+    {/if}
   </section>
 {/if}
