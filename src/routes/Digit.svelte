@@ -57,16 +57,10 @@
   }
 
   let inputNumber;
-  let outputNumber;
   let predictedValue;
-  $: if (inputNumber) {
-    const r = nn.predict(inputNumber);
-    outputNumber = r.dataSync()[0];
-  }
 
   function predictValue(value) {
-    const result = nn.predict(value.detail);
-    predictedValue = result[0];
+    predictedValue = nn.predict(value.detail);
   }
 
   function clearResult() {
@@ -98,7 +92,7 @@
       src="https://media.giphy.com/media/XzutKuTTlIEeI/giphy.gif"
       alt="training" />
   {/if}
-  {#if training || trained}
+  {#if (training || trained) && lastLoss && lastAcc }
     <div class="graphs">
       <div>
         <label>last loss: {lastLoss}</label>
@@ -108,7 +102,6 @@
         <label>last acc: {lastAcc}</label>
         <div bind:this={accuracyChart} />
       </div>
-
     </div>
   {/if}
 </section>
@@ -117,7 +110,7 @@
   <section>
     <h2>Test</h2>
     <CanvasEditor on:test={predictValue} on:clear={clearResult} />
-    {#if predictedValue}
+    {#if predictedValue !== undefined}
       <p>Result: {predictedValue}</p>
     {/if}
   </section>

@@ -48,7 +48,7 @@ export default class DigitsNeuralNetwork {
     await this.model.save("downloads://digits-model");
   }
 
-  async load(onIteration) {
+  async load() {
     this.model = await tf.loadLayersModel(
       "http://localhost:5000/digits-model.json"
     );
@@ -114,6 +114,6 @@ export default class DigitsNeuralNetwork {
     const preds = this.model.predict(reshaped).argMax([-1]);
 
     reshaped.dispose();
-    return preds.dataSync();
+    return preds.dataSync()[0];
   }
 }
