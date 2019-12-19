@@ -1,7 +1,5 @@
 import * as tf from "@tensorflow/tfjs";
-import { MnistData } from "./digits-helper.js";
-
-const IMAGE_SIDE = 28;
+import { MnistData, IMAGE_SIDE } from "./digits-helper.js";
 
 function createConvModel() {
   const model = tf.sequential();
@@ -39,9 +37,12 @@ function createConvModel() {
 
 export default class DigitsNeuralNetwork {
   constructor() {
+    this.isTrained = false;
     this.data = new MnistData();
     this.model = createConvModel();
-    this.data.load();
+    this.data.load().then(() => {
+      this.isTrained = true
+    });
   }
 
   async save() {
@@ -54,7 +55,12 @@ export default class DigitsNeuralNetwork {
     );
   }
 
-  async train(plotLoss, plotAccuracy) {
+  async train(plotLoss, plotAccuracy, setTraining) {
+    if (!this.isTrained) {
+      alert('wait till the data has been loaded');
+      return;
+    }
+
     const batchSize = 320;
     const validationSplit = 0.15; // 15% of data -> validation to monitor overfitting.
     const trainEpochs = 3;
@@ -75,25 +81,16 @@ export default class DigitsNeuralNetwork {
       callbacks: {
         onBatchEnd: async (batch, logs) => {
           trainBatchCount++;
-          console.log(
-            `Training... (` +
-              `${((trainBatchCount / totalNumBatches) * 100).toFixed(1)}%` +
-              ` complete). To stop training, refresh or close page.`
-          );
           plotLoss(trainBatchCount, logs.loss);
           plotAccuracy(trainBatchCount, logs.acc);
-          // if (onIteration && batch % 10 === 0) {
-          //   onIteration("onBatchEnd", batch, logs);
-          // }
+          setTraining(((trainBatchCount / totalNumBatches) * 100).toFixed(1));
+  
           await tf.nextFrame();
         },
         onEpochEnd: async (epoch, logs) => {
           valAcc = logs.val_acc;
           plotLoss(trainBatchCount, logs.val_loss);
           plotAccuracy(trainBatchCount, logs.val_acc);
-          // if (onIteration) {
-          //   onIteration("onEpochEnd", epoch, logs);
-          // }
           await tf.nextFrame();
         }
       }

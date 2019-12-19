@@ -5,10 +5,13 @@
 
   let accuracyChart;
   let lastAcc;
+  const accuracyValues = [];
   let lossChart;
+  const lossValues = [];
   let lastLoss;
   let training = false;
   let trained = false;
+  let trainingRate = 0;
 
   const nn = new DigitsNeuralNetwork();
 
@@ -17,41 +20,38 @@
     trained = true;
   }
 
-  const lossValues = [];
-  function plotLoss(batch, loss) {
-    lossValues.push({ x: batch, y: loss });
-    tfvis.render.linechart(
-      lossChart,
-      { values: lossValues, series: ["train"] },
-      {
-        xLabel: "Batch #",
-        yLabel: "Loss",
-        width: 400,
-        height: 300
-      }
-    );
-    lastLoss = loss.toFixed(3);
+  function plot(batch, loss, values, chart, yLabel) {
+    values.push({ x: batch, y: loss });
+    if (chart) {
+      tfvis.render.linechart(
+        chart,
+        { values: values, series: ["train"] },
+        {
+          xLabel: "Batch #",
+          yLabel,
+          width: 400,
+          height: 300
+        }
+      );
+    }
+    return loss.toFixed(3);
   }
 
-  const accuracyValues = [];
+  function plotLoss(batch, loss) {
+    lastLoss = plot(batch, loss, lossValues, lossChart, "Loss");
+  }
+
   function plotAccuracy(batch, accuracy) {
-    accuracyValues.push({ x: batch, y: accuracy });
-    tfvis.render.linechart(
-      accuracyChart,
-      { values: accuracyValues, series: ["train"] },
-      {
-        xLabel: "Batch #",
-        yLabel: "Accuracy",
-        width: 400,
-        height: 300
-      }
-    );
-    lastAcc = accuracy.toFixed(3);
+    lastAcc = plot(batch, accuracy, accuracyValues, accuracyChart, "Accuracy");
+  }
+
+  function setTraining(tRate) {
+    trainingRate = tRate;
   }
 
   async function train() {
     training = true;
-    const result = await nn.train(plotLoss, plotAccuracy);
+    const result = await nn.train(plotLoss, plotAccuracy, setTraining);
     training = false;
     trained = true;
   }
@@ -87,12 +87,12 @@
 <button on:click={loadModel}>Load model</button>
 <section>
   {#if training}
-    <p>Training...</p>
+    <p>Training: {trainingRate}%</p>
     <img
       src="https://media.giphy.com/media/XzutKuTTlIEeI/giphy.gif"
       alt="training" />
   {/if}
-  {#if (training || trained) && lastLoss && lastAcc }
+  {#if (training || trained) && lastLoss && lastAcc}
     <div class="graphs">
       <div>
         <label>last loss: {lastLoss}</label>
